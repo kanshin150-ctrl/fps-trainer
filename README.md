@@ -1,1 +1,2 @@
+rush B
 go kill
