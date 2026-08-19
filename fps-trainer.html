@@ -13,22 +13,22 @@
     }
     canvas { display: block; }
 
-    /* 准星 */
+    /* 准星（大小/颜色由 JS 通过 CSS 变量控制） */
     #crosshair {
       position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%);
-      pointer-events: none; z-index: 100; width: 24px; height: 24px;
+      pointer-events: none; z-index: 100;
+      width: var(--ch-size, 24px); height: var(--ch-size, 24px);
     }
     #crosshair::before, #crosshair::after {
-      content: ''; position: absolute; background: rgba(0,255,0,0.8);
+      content: ''; position: absolute; background: var(--ch-color, #00ff00);
     }
     #crosshair::before { width: 2px; height: 100%; left: 50%; transform: translateX(-50%); }
     #crosshair::after { height: 2px; width: 100%; top: 50%; transform: translateY(-50%); }
     #crosshair .dot {
       position: absolute; top: 50%; left: 50%; width: 4px; height: 4px;
-      border-radius: 50%; background: #ff0000; transform: translate(-50%, -50%);
+      border-radius: 50%; background: var(--ch-color, #ff0000); transform: translate(-50%, -50%);
     }
-    /* 开镜时准星变化 */
-    #crosshair.scoped::before, #crosshair.scoped::after { background: rgba(255,0,0,0.9); }
+    /* 开镜时准星线条缩短 */
     #crosshair.scoped::before { height: 80%; }
     #crosshair.scoped::after { width: 80%; }
 
@@ -373,6 +373,21 @@
           <span id="reloadDurationVal" style="color:#fff;font-size:0.8rem;min-width:2.5em;">1.8s</span>
         </div>
       </div>
+      <div class="row"><label for="crosshairHipSize">腰射准星大小</label>
+        <div style="display:flex;align-items:center;gap:0.4rem;width:120px;">
+          <input type="range" id="crosshairHipSize" value="24" min="8" max="40" step="1" style="flex:1;accent-color:#ff4444;" />
+          <span id="crosshairHipSizeVal" style="color:#fff;font-size:0.8rem;min-width:2.5em;">24px</span>
+        </div>
+      </div>
+      <div class="row"><label for="crosshairScopeSize">开镜准星大小</label>
+        <div style="display:flex;align-items:center;gap:0.4rem;width:120px;">
+          <input type="range" id="crosshairScopeSize" value="20" min="8" max="40" step="1" style="flex:1;accent-color:#ff4444;" />
+          <span id="crosshairScopeSizeVal" style="color:#fff;font-size:0.8rem;min-width:2.5em;">20px</span>
+        </div>
+      </div>
+      <div class="row"><label for="crosshairColor">准星颜色</label>
+        <input type="color" id="crosshairColor" value="#00ff00" style="width:120px;height:28px;border:none;background:transparent;cursor:pointer;padding:0;" />
+      </div>
       <button class="btn btn-secondary" id="btnCloseSettings" style="margin-top:0.5rem;">返回</button>
     </div>
   </div>
@@ -475,7 +490,7 @@
     // ==================== 状态 ====================
     const state = {
       gameMode: 'count', ballCount: 15, timeLimit: 60, timeRemaining: 0,
-      distance: 12, wallScale: 1.0, recoilStrength: 1.0,
+      distance: 12, wallScale: 1.0, recoilStrength: 1.0, crosshairHipSize: 24, crosshairScopeSize: 20, crosshairColor: '#00ff00',
       ballSize: 0.35, ballDuration: 1000, ballInterval: 500,
       hits: 0, misses: 0, totalClicks: 0,
       reactionTimes: [], currentBall: 0, totalBalls: 0,
@@ -1132,9 +1147,15 @@
     }
 
     // ==================== 开镜 (ADS) ====================
+    function applyCrosshairSettings() {
+      crosshair.style.setProperty('--ch-color', state.crosshairColor);
+      crosshair.style.setProperty('--ch-size', (state.isScoped ? state.crosshairScopeSize : state.crosshairHipSize) + 'px');
+    }
+
     function setScoped(scoped) {
       state.isScoped = scoped;
       crosshair.classList.toggle('scoped', scoped);
+      applyCrosshairSettings();
       scopeVignette.classList.toggle('active', scoped);
       redDot.classList.toggle('active', scoped);
       const scopeBtn = document.getElementById('btnScope');
@@ -1305,6 +1326,9 @@
       state.recoilStrength = Math.max(0.3, Math.min(5, parseFloat(document.getElementById('recoilStrength').value) || 1));
       state.wallScale = Math.max(0.6, Math.min(1.5, parseFloat(document.getElementById('wallScale').value) || 1));
       state.reloadDuration = Math.max(0.5, Math.min(5, parseFloat(document.getElementById('reloadDuration').value) || 1.8));
+      state.crosshairHipSize = Math.max(8, Math.min(40, parseInt(document.getElementById('crosshairHipSize').value) || 24));
+      state.crosshairScopeSize = Math.max(8, Math.min(40, parseInt(document.getElementById('crosshairScopeSize').value) || 20));
+      state.crosshairColor = document.getElementById('crosshairColor').value || '#00ff00';
     }
 
     function startGame() {
@@ -1314,6 +1338,7 @@
       if (state._startTimeout) { clearTimeout(state._startTimeout); state._startTimeout = null; }
       readSettings();
       wallGroup.scale.set(state.wallScale, state.wallScale, 1);
+      applyCrosshairSettings();
       state.hits = 0; state.misses = 0; state.totalClicks = 0;
       state.reactionTimes = []; state.currentBall = 0;
       state.totalBalls = state.gameMode === 'count' ? state.ballCount : Infinity;
@@ -1650,6 +1675,15 @@
     });
     document.getElementById('reloadDuration').addEventListener('input', function() {
       document.getElementById('reloadDurationVal').textContent = parseFloat(this.value).toFixed(1) + 's';
+    });
+    document.getElementById('crosshairHipSize').addEventListener('input', function() {
+      document.getElementById('crosshairHipSizeVal').textContent = this.value + 'px';
+    });
+    document.getElementById('crosshairScopeSize').addEventListener('input', function() {
+      document.getElementById('crosshairScopeSizeVal').textContent = this.value + 'px';
+    });
+    document.getElementById('crosshairColor').addEventListener('input', function() {
+      crosshair.style.setProperty('--ch-color', this.value);
     });
     window.addEventListener('resize', () => { camera.aspect = window.innerWidth / window.innerHeight; camera.updateProjectionMatrix(); renderer.setSize(window.innerWidth, window.innerHeight); });
 
