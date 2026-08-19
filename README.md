@@ -1,2 +1,3 @@
-rush B
-go kill
+1.rush B
+
+2.go kill
