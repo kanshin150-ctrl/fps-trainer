@@ -990,7 +990,14 @@
       triggerMuzzleFlash();
       triggerRecoil();
 
-      raycaster.setFromCamera(new THREE.Vector2(0, 0), camera);
+      // 随机弹道散布：模拟 CS2 手感（腰射散布较大、开镜更集中，连射热度越高散布越大）
+      const spreadBase = state.isScoped ? 0.002 : 0.007;
+      const spread = spreadBase * (1 + sprayHeat * 2.0);
+      const spreadAngle = Math.random() * Math.PI * 2;
+      const spreadRadius = Math.sqrt(Math.random()) * spread;
+      raycaster.setFromCamera(new THREE.Vector2(
+        Math.cos(spreadAngle) * spreadRadius,
+        Math.sin(spreadAngle) * spreadRadius), camera);
 
       let hitTarget = false;
       for (let i = targetMeshes.length - 1; i >= 0; i--) {
