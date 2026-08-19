@@ -355,6 +355,18 @@
         </div>
       </div>
       <div class="row"><label for="magCapacity">弹匣容量</label><input type="number" id="magCapacity" value="30" min="10" max="100" /></div>
+      <div class="row"><label for="recoilStrength">后坐力强度</label>
+        <div style="display:flex;align-items:center;gap:0.4rem;width:120px;">
+          <input type="range" id="recoilStrength" value="1" min="0.3" max="2" step="0.1" style="flex:1;accent-color:#ff4444;" />
+          <span id="recoilStrengthVal" style="color:#fff;font-size:0.8rem;min-width:2.5em;">1.0×</span>
+        </div>
+      </div>
+      <div class="row"><label for="wallScale">墙面大小</label>
+        <div style="display:flex;align-items:center;gap:0.4rem;width:120px;">
+          <input type="range" id="wallScale" value="1" min="0.6" max="1.5" step="0.05" style="flex:1;accent-color:#ff4444;" />
+          <span id="wallScaleVal" style="color:#fff;font-size:0.8rem;min-width:2.5em;">1.0×</span>
+        </div>
+      </div>
       <button class="btn btn-secondary" id="btnCloseSettings" style="margin-top:0.5rem;">返回</button>
     </div>
   </div>
@@ -457,7 +469,7 @@
     // ==================== 状态 ====================
     const state = {
       gameMode: 'count', ballCount: 15, timeLimit: 60, timeRemaining: 0,
-      distance: 12,
+      distance: 12, wallScale: 1.0, recoilStrength: 1.0,
       ballSize: 0.35, ballDuration: 1000, ballInterval: 500,
       hits: 0, misses: 0, totalClicks: 0,
       reactionTimes: [], currentBall: 0, totalBalls: 0,
@@ -791,12 +803,8 @@
       ring: new THREE.TorusGeometry(1.2, 0.02, 12, 24),
       ring2: new THREE.TorusGeometry(1.45, 0.01, 8, 24),
     };
-    // 墙面可用区域
+    // 墙面可用区域（生成区域随墙面大小动态计算）
     const WALL_SURFACE_Z = WALL_Z + 0.16;
-    const SPAWN_X_MIN = -WALL_W / 2 + 1;
-    const SPAWN_X_MAX = WALL_W / 2 - 1;
-    const SPAWN_Y_MIN = 1.0;
-    const SPAWN_Y_MAX = WALL_H - 1.0;
 
     function createTarget() {
       const group = new THREE.Group();
@@ -843,12 +851,18 @@
 
     function findNonOverlappingPosition(size) {
       const minDist = size * 3; // 最小间距
+      // 生成区域随墙面大小缩放（上下限固定，中间由玩家 wallScale 自定义）
+      const halfW = (WALL_W / 2) * state.wallScale;
+      const topY = WALL_H * state.wallScale;
+      const xMin = -halfW + 1, xMax = halfW - 1;
+      const yMin = 1.0, yMax = topY - 1.0;
+
       let bestX, bestY, attempts = 0;
       const maxAttempts = 50;
 
       do {
-        bestX = SPAWN_X_MIN + Math.random() * (SPAWN_X_MAX - SPAWN_X_MIN);
-        bestY = SPAWN_Y_MIN + Math.random() * (SPAWN_Y_MAX - SPAWN_Y_MIN);
+        bestX = xMin + Math.random() * (xMax - xMin);
+        bestY = yMin + Math.random() * (yMax - yMin);
         attempts++;
         // 检查与现有目标的距离
         let overlap = false;
@@ -986,31 +1000,32 @@
 
     function triggerRecoil() {
       const scoped = state.isScoped;
+      const s = state.recoilStrength; // 后坐力强度倍率
       // 枪械后坐力
-      gunModel.position.z += scoped ? 0.035 : 0.03;
-      gunModel.position.y += scoped ? 0.012 : 0.01;
-      gunModel.rotation.x += scoped ? 0.08 : 0.06;
+      gunModel.position.z += (scoped ? 0.035 : 0.03) * s;
+      gunModel.position.y += (scoped ? 0.012 : 0.01) * s;
+      gunModel.rotation.x += (scoped ? 0.08 : 0.06) * s;
 
       // 连射热度递增：持续射击时后坐力逐步累积
       sprayHeat = Math.min(1, sprayHeat + 0.12);
 
       // 镜头俯仰后坐力：每发上飘，随连射递增
-      const pitchKick = (scoped ? 0.012 : 0.005) * (0.5 + sprayHeat * 1.5);
+      const pitchKick = (scoped ? 0.012 : 0.005) * (0.5 + sprayHeat * 1.5) * s;
       sprayPitch += pitchKick;
       camera.rotation.x += pitchKick;
 
       // 镜头水平漂移：随连射递增的随机左右，是压枪的主要难点
-      const yawKick = (Math.random() - 0.5) * (scoped ? 0.0024 : 0.004) * (0.2 + sprayHeat * 1.8);
+      const yawKick = (Math.random() - 0.5) * (scoped ? 0.0024 : 0.004) * (0.2 + sprayHeat * 1.8) * s;
       sprayYaw += yawKick;
       camera.rotation.y += yawKick;
 
       // 垂直位移（轻微）
-      const yKick = (scoped ? 0.008 : 0.004) * (0.6 + sprayHeat * 0.8);
+      const yKick = (scoped ? 0.008 : 0.004) * (0.6 + sprayHeat * 0.8) * s;
       camera.position.y += yKick;
       cameraRecoilY += yKick;
 
       // 随机抖动
-      cameraShakeIntensity = (scoped ? 0.006 : 0.004) * (0.6 + sprayHeat * 0.8);
+      cameraShakeIntensity = (scoped ? 0.006 : 0.004) * (0.6 + sprayHeat * 0.8) * s;
     }
 
     function updateMuzzleFlash() {
@@ -1281,6 +1296,8 @@
       state.ballDuration = parseInt(document.getElementById('ballDuration').value) || 1000;
       state.ballInterval = parseInt(document.getElementById('ballInterval').value) || 500;
       state.maxAmmo = Math.max(10, Math.min(100, parseInt(document.getElementById('magCapacity').value) || 30));
+      state.recoilStrength = Math.max(0.3, Math.min(2, parseFloat(document.getElementById('recoilStrength').value) || 1));
+      state.wallScale = Math.max(0.6, Math.min(1.5, parseFloat(document.getElementById('wallScale').value) || 1));
     }
 
     function startGame() {
@@ -1289,6 +1306,7 @@
       clearInterval(state._timerInterval); state._timerInterval = null;
       if (state._startTimeout) { clearTimeout(state._startTimeout); state._startTimeout = null; }
       readSettings();
+      wallGroup.scale.set(state.wallScale, state.wallScale, 1);
       state.hits = 0; state.misses = 0; state.totalClicks = 0;
       state.reactionTimes = []; state.currentBall = 0;
       state.totalBalls = state.gameMode === 'count' ? state.ballCount : Infinity;
@@ -1616,6 +1634,12 @@
     });
     document.getElementById('distance').addEventListener('input', function() {
       document.getElementById('distanceVal').textContent = this.value + 'm';
+    });
+    document.getElementById('recoilStrength').addEventListener('input', function() {
+      document.getElementById('recoilStrengthVal').textContent = parseFloat(this.value).toFixed(1) + '×';
+    });
+    document.getElementById('wallScale').addEventListener('input', function() {
+      document.getElementById('wallScaleVal').textContent = parseFloat(this.value).toFixed(2) + '×';
     });
     window.addEventListener('resize', () => { camera.aspect = window.innerWidth / window.innerHeight; camera.updateProjectionMatrix(); renderer.setSize(window.innerWidth, window.innerHeight); });
 
