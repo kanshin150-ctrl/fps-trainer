@@ -1448,13 +1448,30 @@
       scopeVignette.classList.remove('active'); redDot.classList.remove('active');
     }
 
+    function clampNum(v, lo, hi) { return Math.max(lo, Math.min(hi, v)); }
+
+    function difficultyFactor() {
+      // 各设置相对"标准难度"的倍率（>1 = 更难 = 加分，<1 = 更简单 = 减分）
+      const sizeF     = clampNum(0.35 / state.ballSize, 0.6, 1.6);      // 目标越小越难
+      const reloadF   = clampNum(state.reloadDuration / 1.8, 0.7, 1.5);  // 换弹越慢越难
+      const durF      = clampNum(1000 / state.ballDuration, 0.6, 1.6);   // 留存/消失时间越短越难
+      const intervalF = clampNum(500 / state.ballInterval, 0.7, 1.5);    // 生成间隔越短越难
+      const wallF     = clampNum(state.wallScale, 0.8, 1.4);             // 墙面越大越难
+      const distF     = clampNum(state.distance / 12, 0.8, 1.4);         // 离墙越远越难
+      return clampNum((sizeF + reloadF + durF + intervalF + wallF + distF) / 6, 0.7, 1.4);
+    }
+
     function getRank(accuracy, avgRt) {
+      // 反应速度分：平均反应时间越短越高（200ms→100，800ms→0）
       const speedScore = Math.max(0, Math.min(100, (800 - avgRt) / 6));
-      const totalScore = accuracy * 0.6 + speedScore * 0.4;
-      if (totalScore >= 90) return { letter: 'S', desc: '颗秒级！反应极快，指哪打哪，每一枪都是头！' };
-      if (totalScore >= 75) return { letter: 'A', desc: '准星锁定，对枪胜率很高，稳定上分水平。' };
-      if (totalScore >= 60) return { letter: 'B', desc: '中规中矩，有颗秒的潜力，多练练预瞄和定位。' };
-      if (totalScore >= 40) return { letter: 'C', desc: '反应还需提升，建议降低灵敏度，从跟枪开始练起。' };
+      // 基础实力分 = 准确率 + 反应速度
+      const skillScore = accuracy * 0.6 + speedScore * 0.4;
+      // 乘以难度系数：设置越难，得分越高
+      const totalScore = skillScore * difficultyFactor();
+      if (totalScore >= 85) return { letter: 'S', desc: '颗秒级！反应极快，指哪打哪，每一枪都是头！' };
+      if (totalScore >= 68) return { letter: 'A', desc: '准星锁定，对枪胜率很高，稳定上分水平。' };
+      if (totalScore >= 50) return { letter: 'B', desc: '中规中矩，有颗秒的潜力，多练练预瞄和定位。' };
+      if (totalScore >= 32) return { letter: 'C', desc: '反应还需提升，建议降低灵敏度，从跟枪开始练起。' };
       return { letter: 'D', desc: '萌新水平，别灰心，坚持训练就能看到进步！' };
     }
 
