@@ -280,6 +280,19 @@
     }
     #btnScope { right: 128px; bottom: calc(44px + var(--safe-b)); width: 62px; height: 62px; font-size: 0.85rem; }
     #btnReload { right: 150px; bottom: calc(118px + var(--safe-b)); width: 58px; height: 58px; font-size: 0.8rem; }
+    #btnPause {
+      position: fixed; top: 14px; right: 14px;
+      width: 62px; height: 62px; font-size: 0.85rem;
+      display: none; z-index: 130;
+    }
+    body.touch-mode.in-game #btnPause { display: flex; }
+
+    /* 手机端所有界面可上下滑动 */
+    body.touch-mode .overlay {
+      overflow-y: auto; overflow-x: hidden;
+      justify-content: flex-start;
+      padding: 2rem 0 3rem;
+    }
 
     @media (max-width: 500px) {
       .panel { width: 90vw; padding: 1.5rem; } .title { font-size: 2rem; }
@@ -298,7 +311,6 @@
     <div class="stat"><span class="stat-label" id="remainLabel">剩余</span><span class="stat-value" id="remainDisp">0</span></div>
     <div class="stat"><span class="stat-label">弹匣</span><span class="stat-value" id="ammoDisp" style="color:#ffcc00;">30/30</span></div>
     <div class="stat"><span class="stat-label">平均反应</span><span class="stat-value rt" id="avgRtDisp">0ms</span></div>
-    <button id="btnEndRound">结束训练</button>
   </div>
   <div id="hint">移动瞄准 · 左键射击 · 右键开镜 · F换弹 · T检视 · ESC暂停</div>
   <div id="hitFeed"></div>
@@ -310,6 +322,7 @@
     <button class="touch-btn" id="btnScope">开镜</button>
     <button class="touch-btn" id="btnReload">换弹</button>
   </div>
+  <button class="touch-btn" id="btnPause">暂停</button>
 
   <!-- 横屏提示 -->
   <div id="rotateOverlay" class="overlay hidden">
@@ -1532,6 +1545,9 @@
       bindTouchBtn('btnScope', () => {
         if (state.isActive && !state.roundOver && !state.isPaused) setScoped(!state.isScoped);
       });
+      bindTouchBtn('btnPause', () => {
+        if (state.isActive && !state.roundOver && !state.isPaused) pauseGame();
+      });
     }
 
     // ==================== 游戏流程 ====================
@@ -1944,7 +1960,6 @@
     document.getElementById('btnStartGame').addEventListener('click', startGame);
     document.getElementById('btnRestart').addEventListener('click', startGame);
     document.getElementById('btnBackToMenu').addEventListener('click', backToMenu);
-    document.getElementById('btnEndRound').addEventListener('click', endRound);
     document.getElementById('btnResume').addEventListener('click', resumeGame);
     document.getElementById('btnPauseRestart').addEventListener('click', pauseRestart);
     document.getElementById('btnPauseQuit').addEventListener('click', pauseQuit);
