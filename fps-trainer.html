@@ -35,6 +35,8 @@
     #crosshair.sniper::before { width: 1px; }
     #crosshair.sniper::after { height: 1px; }
     #crosshair.sniper .dot { width: 2px; height: 2px; }
+    /* 狙击枪腰射（未开镜）强制隐藏准星 —— CSS 兜底，避免任何 JS 时序导致准星闪现 */
+    #crosshair.sniper:not(.scoped) { display: none !important; }
 
     /* 开镜红点瞄准镜 */
     #scopeVignette {
