@@ -290,6 +290,9 @@
     /* 手机端按键自定义（设置项 + 编辑模式） */
     #btnCustomizeRow { display: none; }
     body.touch-mode #btnCustomizeRow { display: flex; }
+    #touchSensitivityRow { display: none; }
+    body.touch-mode #touchSensitivityRow { display: flex; }
+    body.touch-mode #mouseSensitivityRow { display: none; }
     .touch-btn .rsz {
       display: none; position: absolute; right: -8px; bottom: -8px;
       width: 22px; height: 22px; border-radius: 50%;
@@ -468,10 +471,16 @@
       <div class="row"><label for="crosshairColor">准星颜色</label>
         <input type="color" id="crosshairColor" value="#00ff00" style="width:120px;height:28px;border:none;background:transparent;cursor:pointer;padding:0;" />
       </div>
-      <div class="row"><label for="mouseSensitivity">鼠标灵敏度</label>
+      <div class="row" id="mouseSensitivityRow"><label for="mouseSensitivity">鼠标灵敏度</label>
         <div style="display:flex;align-items:center;gap:0.4rem;width:120px;">
           <input type="range" id="mouseSensitivity" value="1" min="0.3" max="2.5" step="0.1" style="flex:1;accent-color:#ff4444;" />
           <span id="mouseSensitivityVal" style="color:#fff;font-size:0.8rem;min-width:2.5em;">1.0×</span>
+        </div>
+      </div>
+      <div class="row" id="touchSensitivityRow"><label for="touchSensitivity">滑屏灵敏度</label>
+        <div style="display:flex;align-items:center;gap:0.4rem;width:120px;">
+          <input type="range" id="touchSensitivity" value="1.4" min="0.3" max="3.0" step="0.1" style="flex:1;accent-color:#ff4444;" />
+          <span id="touchSensitivityVal" style="color:#fff;font-size:0.8rem;min-width:2.5em;">1.4×</span>
         </div>
       </div>
       <div style="border-top:1px solid #2a2a3a;padding-top:0.5rem;margin-top:0.2rem;color:#ffaa00;font-size:0.75rem;letter-spacing:0.15em;">狙击枪专属设置</div>
@@ -613,7 +622,7 @@
     // ==================== 状态 ====================
     const state = {
       gameMode: 'count', ballCount: 15, timeLimit: 60, timeRemaining: 0,
-      distance: 12, wallScale: 1.0, recoilStrength: 1.0, crosshairHipSize: 24, crosshairScopeSize: 20, crosshairColor: '#00ff00', mouseSensitivity: 1.0, weapon: 'rifle', sniperScopeSize: 18, sniperCrosshairColor: '#00ff00', sniperReloadDuration: 2.2, sniperRecoilStrength: 1.6,
+      distance: 12, wallScale: 1.0, recoilStrength: 1.0, crosshairHipSize: 24, crosshairScopeSize: 20, crosshairColor: '#00ff00', mouseSensitivity: 1.0, touchSensitivity: 1.4, weapon: 'rifle', sniperScopeSize: 18, sniperCrosshairColor: '#00ff00', sniperReloadDuration: 2.2, sniperRecoilStrength: 1.6,
       ballSize: 0.35, ballDuration: 1000, ballInterval: 500,
       hits: 0, misses: 0, totalClicks: 0, hipHits: 0,
       reactionTimes: [], currentBall: 0, totalBalls: 0,
@@ -1521,12 +1530,11 @@
     renderer.domElement.addEventListener('contextmenu', e => { e.preventDefault(); e.stopPropagation(); });
 
     // ==================== 触屏控制 ====================
-    const touchSens = 1.4;
     const touchLook = { id: null, lastX: 0, lastY: 0 };
 
     function applyTouchLook(dx, dy) {
       if (!state.isActive || state.roundOver || state.isPaused) return;
-      const sens = (state.isScoped ? adsSensitivity : hipSensitivity) * touchSens;
+      const sens = (state.isScoped ? adsSensitivity : hipSensitivity) * state.touchSensitivity;
       euler.setFromQuaternion(camera.quaternion);
       euler.y -= dx * sens;
       euler.x -= dy * sens;
@@ -1765,6 +1773,7 @@
       state.crosshairScopeSize = Math.max(8, Math.min(40, parseInt(document.getElementById('crosshairScopeSize').value) || 20));
       state.crosshairColor = document.getElementById('crosshairColor').value || '#00ff00';
       state.mouseSensitivity = Math.max(0.3, Math.min(2.5, parseFloat(document.getElementById('mouseSensitivity').value) || 1));
+      state.touchSensitivity = Math.max(0.3, Math.min(3.0, parseFloat(document.getElementById('touchSensitivity').value) || 1.4));
       state.weapon = document.getElementById('weapon').value || 'rifle';
       state.sniperScopeSize = Math.max(8, Math.min(40, parseInt(document.getElementById('sniperScopeSize').value) || 18));
       state.sniperCrosshairColor = document.getElementById('sniperCrosshairColor').value || '#00ff00';
@@ -2197,6 +2206,9 @@
     });
     document.getElementById('mouseSensitivity').addEventListener('input', function() {
       document.getElementById('mouseSensitivityVal').textContent = parseFloat(this.value).toFixed(1) + '×';
+    });
+    document.getElementById('touchSensitivity').addEventListener('input', function() {
+      document.getElementById('touchSensitivityVal').textContent = parseFloat(this.value).toFixed(1) + '×';
     });
     document.getElementById('sniperScopeSize').addEventListener('input', function() {
       document.getElementById('sniperScopeSizeVal').textContent = this.value + 'px';
