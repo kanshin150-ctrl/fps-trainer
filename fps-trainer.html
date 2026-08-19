@@ -415,6 +415,15 @@
     <div class="panel" style="width:460px;text-align:center;">
       <p style="color:#777;letter-spacing:0.2em;font-size:0.75rem;">训练评级</p>
       <div class="result-rank" id="rankDisp">S</div>
+      <div style="margin:0.2rem 0 0.3rem;">
+        <span style="font-size:1.4rem;font-weight:800;color:#fff;" id="scoreDisp">0</span>
+        <span style="font-size:0.75rem;color:#777;margin-left:0.4rem;">总分</span>
+      </div>
+      <div style="display:flex;justify-content:space-between;gap:0.5rem;font-size:0.7rem;color:#888;margin-bottom:0.6rem;">
+        <div style="flex:1;">准确率 45%<br><span id="scoreAccDisp" style="color:#44cc44;font-weight:700;">0</span></div>
+        <div style="flex:1;">反应 30%<br><span id="scoreSpeedDisp" style="color:#ffaa00;font-weight:700;">0</span></div>
+        <div style="flex:1;">难度 25%<br><span id="scoreDiffDisp" style="color:#44ccff;font-weight:700;">0</span></div>
+      </div>
       <p style="color:#aaa;font-size:0.85rem;margin-bottom:0.5rem;" id="rankDescDisp"></p>
       <div class="result-grid">
         <div class="result-stat"><div class="rs-label">命中率</div><div class="rs-value" id="accDisp">100%</div></div>
@@ -1445,6 +1454,10 @@
       const rankEl = document.getElementById('rankDisp');
       rankEl.textContent = rank.letter; rankEl.className = 'result-rank ' + rank.letter.toLowerCase();
       document.getElementById('rankDescDisp').textContent = rank.desc;
+      document.getElementById('scoreDisp').textContent = rank.totalScore;
+      document.getElementById('scoreAccDisp').textContent = Math.round(rank.accuracyScore);
+      document.getElementById('scoreSpeedDisp').textContent = Math.round(rank.speedScore);
+      document.getElementById('scoreDiffDisp').textContent = Math.round(rank.difficultyScore);
       const accEl = document.getElementById('accDisp');
       accEl.textContent = accuracy.toFixed(1) + '%';
       accEl.className = 'rs-value ' + (accuracy >= 90 ? 'good' : accuracy >= 70 ? 'ok' : 'bad');
@@ -1482,17 +1495,21 @@
     }
 
     function getRank(accuracy, avgRt) {
-      // 反应速度分：平均反应时间越短越高（200ms→100，800ms→0）
-      const speedScore = Math.max(0, Math.min(100, (800 - avgRt) / 6));
-      // 基础实力分 = 准确率 + 反应速度
-      const skillScore = accuracy * 0.6 + speedScore * 0.4;
-      // 乘以难度系数：设置越难，得分越高
-      const totalScore = skillScore * difficultyFactor();
-      if (totalScore >= 85) return { letter: 'S', desc: '颗秒级！反应极快，指哪打哪，每一枪都是头！' };
-      if (totalScore >= 68) return { letter: 'A', desc: '准星锁定，对枪胜率很高，稳定上分水平。' };
-      if (totalScore >= 50) return { letter: 'B', desc: '中规中矩，有颗秒的潜力，多练练预瞄和定位。' };
-      if (totalScore >= 32) return { letter: 'C', desc: '反应还需提升，建议降低灵敏度，从跟枪开始练起。' };
-      return { letter: 'D', desc: '萌新水平，别灰心，坚持训练就能看到进步！' };
+      // 三项子分数（均为 0-100）
+      const accuracyScore = clampNum(accuracy, 0, 100);                     // 命中率
+      const speedScore = clampNum((800 - avgRt) / 6, 0, 100);               // 反应速度：200ms→100，800ms→0
+      const difficultyScore = clampNum((difficultyFactor() - 0.7) / 0.7 * 100, 0, 100); // 难度：标准(1.0)≈43分，最难(1.4)=100分
+      // 加权总分：准确率 45% + 反应 30% + 难度 25%
+      const totalScore = Math.round(clampNum(
+        accuracyScore * 0.45 + speedScore * 0.30 + difficultyScore * 0.25, 0, 100));
+
+      let letter = 'D', desc = '萌新水平，别灰心，坚持训练就能看到进步！';
+      if (totalScore >= 85) { letter = 'S'; desc = '颗秒级！反应极快，指哪打哪，每一枪都是头！'; }
+      else if (totalScore >= 68) { letter = 'A'; desc = '准星锁定，对枪胜率很高，稳定上分水平。'; }
+      else if (totalScore >= 52) { letter = 'B'; desc = '中规中矩，有颗秒的潜力，多练练预瞄和定位。'; }
+      else if (totalScore >= 32) { letter = 'C'; desc = '反应还需提升，建议降低灵敏度，从跟枪开始练起。'; }
+
+      return { letter, desc, totalScore, accuracyScore, speedScore, difficultyScore };
     }
 
     function backToMenu() {
