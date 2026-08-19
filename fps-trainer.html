@@ -2,13 +2,14 @@
 <html lang="zh-CN">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
   <title>FPS 反应力训练 - 3D 颗秒测试</title>
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
     body {
       font-family: 'Segoe UI', 'Microsoft YaHei', sans-serif;
       background: #000; overflow: hidden; height: 100vh; width: 100vw; user-select: none; cursor: default;
+      touch-action: none; -webkit-tap-highlight-color: transparent;
     }
     canvas { display: block; }
 
@@ -230,6 +231,35 @@
     .result-bar-fill { height: 100%; border-radius: 3px; background: linear-gradient(90deg, #ff4444, #ffaa00, #44cc44); transition: width 0.8s ease-out; }
     .result-buttons { display: flex; gap: 1rem; justify-content: center; margin-top: 0.5rem; }
 
+    /* 触屏虚拟按键 */
+    #touchControls {
+      position: fixed; right: 0; bottom: 0;
+      width: 240px; height: 220px;
+      pointer-events: none; z-index: 120; display: none;
+      --safe-b: env(safe-area-inset-bottom, 0px);
+    }
+    body.touch-mode #touchControls { display: block; }
+    .touch-btn {
+      position: absolute; pointer-events: auto;
+      border-radius: 50%; border: 2px solid rgba(255,255,255,0.35);
+      background: rgba(255,255,255,0.12);
+      color: #fff; font-weight: 700;
+      display: flex; align-items: center; justify-content: center;
+      user-select: none; touch-action: none;
+      -webkit-tap-highlight-color: transparent;
+      text-shadow: 0 1px 2px rgba(0,0,0,0.5);
+    }
+    .touch-btn:active { background: rgba(255,255,255,0.3); }
+    .touch-btn.active { background: rgba(255,70,70,0.55); border-color: rgba(255,90,90,0.8); }
+    #btnFire {
+      right: 18px; bottom: calc(24px + var(--safe-b));
+      width: 90px; height: 90px;
+      background: rgba(255,60,60,0.32); border-color: rgba(255,90,90,0.65);
+      font-size: 1.15rem; letter-spacing: 0.05em;
+    }
+    #btnScope { right: 128px; bottom: calc(44px + var(--safe-b)); width: 62px; height: 62px; font-size: 0.85rem; }
+    #btnReload { right: 150px; bottom: calc(118px + var(--safe-b)); width: 58px; height: 58px; font-size: 0.8rem; }
+
     @media (max-width: 500px) {
       .panel { width: 90vw; padding: 1.5rem; } .title { font-size: 2rem; }
     }
@@ -252,6 +282,13 @@
   <div id="hint">移动瞄准 · 左键射击 · 右键切换开镜 · F换弹 · ESC暂停</div>
   <div id="hitMarker"></div>
   <div id="reloadIndicator">换弹中...</div>
+
+  <!-- 触屏虚拟按键 -->
+  <div id="touchControls">
+    <button class="touch-btn" id="btnFire">开火</button>
+    <button class="touch-btn" id="btnScope">开镜</button>
+    <button class="touch-btn" id="btnReload">换弹</button>
+  </div>
 
   <!-- 菜单 -->
   <div id="menuOverlay" class="overlay">
@@ -361,6 +398,11 @@
     const hitMarker = document.getElementById('hitMarker');
     const reloadIndicator = document.getElementById('reloadIndicator');
     const hud = document.getElementById('hud');
+
+    // ==================== 触屏检测 ====================
+    const isTouchDevice = window.matchMedia('(pointer: coarse)').matches &&
+      ('ontouchstart' in window || navigator.maxTouchPoints > 0);
+    if (isTouchDevice) document.body.classList.add('touch-mode');
 
     // ==================== 状态 ====================
     const state = {
@@ -994,6 +1036,8 @@
       crosshair.classList.toggle('scoped', scoped);
       scopeVignette.classList.toggle('active', scoped);
       redDot.classList.toggle('active', scoped);
+      const scopeBtn = document.getElementById('btnScope');
+      if (scopeBtn) scopeBtn.classList.toggle('active', scoped);
     }
 
     function updateADS(dt) {
@@ -1021,6 +1065,7 @@
     let _scopeToggleFlag = false;
 
     function onMouseDown(e) {
+      if (isTouchDevice) return;
       if (!state.isActive || state.roundOver || state.isPaused) return;
       if (e.button === 0) shoot();
       if (e.button === 2) {
@@ -1069,6 +1114,72 @@
     document.addEventListener('contextmenu', e => e.preventDefault());
     renderer.domElement.addEventListener('contextmenu', e => { e.preventDefault(); e.stopPropagation(); });
 
+    // ==================== 触屏控制 ====================
+    const touchSens = 1.4;
+    const touchLook = { id: null, lastX: 0, lastY: 0 };
+
+    function applyTouchLook(dx, dy) {
+      if (!state.isActive || state.roundOver || state.isPaused) return;
+      const sens = (state.isScoped ? adsSensitivity : hipSensitivity) * touchSens;
+      euler.setFromQuaternion(camera.quaternion);
+      euler.y -= dx * sens;
+      euler.x -= dy * sens;
+      euler.x = Math.max(-PI_2 * 0.8, Math.min(PI_2 * 0.8, euler.x));
+      camera.quaternion.setFromEuler(euler);
+    }
+
+    if (isTouchDevice) {
+      renderer.domElement.addEventListener('touchstart', (e) => {
+        for (const t of e.changedTouches) {
+          if (touchLook.id === null) {
+            touchLook.id = t.identifier;
+            touchLook.lastX = t.clientX;
+            touchLook.lastY = t.clientY;
+          }
+        }
+        e.preventDefault();
+      }, { passive: false });
+
+      renderer.domElement.addEventListener('touchmove', (e) => {
+        for (const t of e.changedTouches) {
+          if (t.identifier === touchLook.id) {
+            applyTouchLook(t.clientX - touchLook.lastX, t.clientY - touchLook.lastY);
+            touchLook.lastX = t.clientX;
+            touchLook.lastY = t.clientY;
+          }
+        }
+        e.preventDefault();
+      }, { passive: false });
+
+      const endLook = (e) => {
+        for (const t of e.changedTouches) {
+          if (t.identifier === touchLook.id) touchLook.id = null;
+        }
+      };
+      renderer.domElement.addEventListener('touchend', endLook);
+      renderer.domElement.addEventListener('touchcancel', endLook);
+
+      // 虚拟按键
+      function bindTouchBtn(id, handler) {
+        const btn = document.getElementById(id);
+        if (!btn) return;
+        btn.addEventListener('touchstart', (e) => {
+          e.preventDefault(); e.stopPropagation();
+          handler();
+        }, { passive: false });
+        btn.addEventListener('contextmenu', (e) => e.preventDefault());
+      }
+      bindTouchBtn('btnFire', () => {
+        if (state.isActive && !state.roundOver && !state.isPaused) shoot();
+      });
+      bindTouchBtn('btnReload', () => {
+        if (state.isActive && !state.roundOver && !state.isPaused) startReload();
+      });
+      bindTouchBtn('btnScope', () => {
+        if (state.isActive && !state.roundOver && !state.isPaused) setScoped(!state.isScoped);
+      });
+    }
+
     // ==================== 游戏流程 ====================
     let spawnInterval = null;
 
@@ -1096,8 +1207,10 @@
       clearAllTargets(); updateHUD();
       menuOverlay.classList.add('hidden'); resultOverlay.classList.add('hidden');
       crosshair.style.display = 'block'; hint.style.opacity = '1'; hud.style.opacity = '1';
-      // 自动锁定鼠标——延迟一帧确保 overlay 已隐藏
-      requestAnimationFrame(() => renderer.domElement.requestPointerLock());
+      // 自动锁定鼠标——延迟一帧确保 overlay 已隐藏（仅桌面端）
+      if (!isTouchDevice) {
+        requestAnimationFrame(() => renderer.domElement.requestPointerLock());
+      }
       camera.position.set(0, 1.6, -12 + state.distance);
       cameraBasePos.set(0, 1.6, -12 + state.distance);
       cameraRecoilPitch = 0; cameraRecoilY = 0; cameraShakeIntensity = 0;
@@ -1232,7 +1345,7 @@
       if (!state.isPaused) return;
       state.isPaused = false;
       pauseOverlay.classList.add('hidden');
-      renderer.domElement.requestPointerLock();
+      if (!isTouchDevice) renderer.domElement.requestPointerLock();
     }
 
     function pauseRestart() {
@@ -1368,6 +1481,10 @@
       img.src = url;
     }
     crosshair.style.display = 'none'; hud.style.opacity = '0';
+    if (isTouchDevice) {
+      hint.textContent = '滑动屏幕转视角 · 右下角开火 / 换弹 / 开镜';
+      document.querySelector('.start-hint').textContent = '滑动转视角 · 右下角开火 / 换弹 / 开镜';
+    }
     document.getElementById('btnStartGame').addEventListener('click', startGame);
     document.getElementById('btnRestart').addEventListener('click', startGame);
     document.getElementById('btnBackToMenu').addEventListener('click', backToMenu);
@@ -1399,6 +1516,7 @@
     animate();
     console.log('🔫 3D FPS 颗秒训练 - AK-47 已就绪');
     console.log('  - 左键射击 | 右键切换开镜 | F换弹 | ESC结束');
+    if (isTouchDevice) console.log('  - 触屏模式：滑动转视角 | 右下角开火/换弹/开镜');
   </script>
 </body>
 </html>
