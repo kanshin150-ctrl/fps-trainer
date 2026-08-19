@@ -452,9 +452,10 @@
         <span style="font-size:0.75rem;color:#777;margin-left:0.4rem;">总分</span>
       </div>
       <div style="display:flex;justify-content:space-between;gap:0.5rem;font-size:0.7rem;color:#888;margin-bottom:0.6rem;">
-        <div style="flex:1;">准确率 45%<br><span id="scoreAccDisp" style="color:#44cc44;font-weight:700;">0</span></div>
+        <div style="flex:1;">准确率 <span id="wAcc">45%</span><br><span id="scoreAccDisp" style="color:#44cc44;font-weight:700;">0</span></div>
         <div style="flex:1;">反应 30%<br><span id="scoreSpeedDisp" style="color:#ffaa00;font-weight:700;">0</span></div>
-        <div style="flex:1;">难度 25%<br><span id="scoreDiffDisp" style="color:#44ccff;font-weight:700;">0</span></div>
+        <div style="flex:1;">难度 <span id="wDiff">25%</span><br><span id="scoreDiffDisp" style="color:#44ccff;font-weight:700;">0</span></div>
+        <div style="flex:1;display:none;" id="noScopeCell">腰射加成<br><span id="scoreNoScopeDisp" style="color:#ff66ff;font-weight:700;">+0分</span></div>
       </div>
       <p style="color:#aaa;font-size:0.85rem;margin-bottom:0.5rem;" id="rankDescDisp"></p>
       <div class="result-grid">
@@ -464,6 +465,7 @@
         <div class="result-stat"><div class="rs-label">平均反应时间</div><div class="rs-value" id="avgRtResDisp">0ms</div></div>
         <div class="result-stat"><div class="rs-label">最快反应</div><div class="rs-value" id="bestRtDisp">0ms</div></div>
         <div class="result-stat"><div class="rs-label" style="color:#ffcc00;">弹药效率</div><div class="rs-value" id="ammoEffDisp">0%</div></div>
+        <div class="result-stat"><div class="rs-label" style="color:#ff66ff;">腰射命中</div><div class="rs-value" id="hipHitsDisp">0</div></div>
       </div>
       <div><p style="font-size:0.7rem;color:#777;margin-bottom:0.3rem;">命中率</p>
         <div class="result-bar"><div class="result-bar-fill" id="accBar" style="width:0%"></div></div>
@@ -551,7 +553,7 @@
       gameMode: 'count', ballCount: 15, timeLimit: 60, timeRemaining: 0,
       distance: 12, wallScale: 1.0, recoilStrength: 1.0, crosshairHipSize: 24, crosshairScopeSize: 20, crosshairColor: '#00ff00', mouseSensitivity: 1.0, weapon: 'rifle', sniperScopeSize: 18, sniperCrosshairColor: '#00ff00', sniperReloadDuration: 2.2, sniperRecoilStrength: 1.6,
       ballSize: 0.35, ballDuration: 1000, ballInterval: 500,
-      hits: 0, misses: 0, totalClicks: 0,
+      hits: 0, misses: 0, totalClicks: 0, hipHits: 0,
       reactionTimes: [], currentBall: 0, totalBalls: 0,
       isActive: false, isLocked: false, roundOver: false, isPaused: false, isFiring: false,
       targets: [],
@@ -1150,6 +1152,7 @@
           const rt = performance.now() - t.userData.spawnTime;
           state.reactionTimes.push(rt);
           state.hits++;
+          if (!state.isScoped) state.hipHits++;   // 腰射命中（狙击枪=无准星盲狙）
           hitTarget = true;
           showHitMarker(rt);
           removeTarget(t, i, true);
@@ -1553,7 +1556,7 @@
       wallGroup.scale.set(state.wallScale, state.wallScale, 1);
       applyWeapon();
       applyCrosshairSettings();
-      state.hits = 0; state.misses = 0; state.totalClicks = 0;
+      state.hits = 0; state.misses = 0; state.totalClicks = 0; state.hipHits = 0;
       state.reactionTimes = []; state.currentBall = 0;
       state.totalBalls = state.gameMode === 'count' ? state.ballCount : Infinity;
       state.isActive = true; state.roundOver = false; state.isPaused = false;
@@ -1639,10 +1642,16 @@
       const rankEl = document.getElementById('rankDisp');
       rankEl.textContent = rank.letter; rankEl.className = 'result-rank ' + rank.letter.toLowerCase();
       document.getElementById('rankDescDisp').textContent = rank.desc;
+      const isSniper = state.weapon === 'sniper';
       document.getElementById('scoreDisp').textContent = rank.totalScore;
       document.getElementById('scoreAccDisp').textContent = Math.round(rank.accuracyScore);
       document.getElementById('scoreSpeedDisp').textContent = Math.round(rank.speedScore);
       document.getElementById('scoreDiffDisp').textContent = Math.round(rank.difficultyScore);
+      document.getElementById('wAcc').textContent = (isSniper ? 50 : 45) + '%';
+      document.getElementById('wDiff').textContent = (isSniper ? 20 : 25) + '%';
+      document.getElementById('noScopeCell').style.display = isSniper ? 'flex' : 'none';
+      document.getElementById('scoreNoScopeDisp').textContent = '+' + rank.noscopeBonus + '分';
+      document.getElementById('hipHitsDisp').textContent = state.hipHits;
       const accEl = document.getElementById('accDisp');
       accEl.textContent = accuracy.toFixed(1) + '%';
       accEl.className = 'rs-value ' + (accuracy >= 90 ? 'good' : accuracy >= 70 ? 'ok' : 'bad');
@@ -1684,9 +1693,17 @@
       const accuracyScore = clampNum(accuracy, 0, 100);                     // 命中率
       const speedScore = clampNum((800 - avgRt) / 6, 0, 100);               // 反应速度：200ms→100，800ms→0
       const difficultyScore = clampNum((difficultyFactor() - 0.7) / 0.7 * 100, 0, 100); // 难度：标准(1.0)≈43分，最难(1.4)=100分
-      // 加权总分：准确率 45% + 反应 30% + 难度 25%
-      const totalScore = Math.round(clampNum(
-        accuracyScore * 0.45 + speedScore * 0.30 + difficultyScore * 0.25, 0, 100));
+      let totalScore, noscopeBonus = 0;
+      if (state.weapon === 'sniper') {
+        // 狙击枪评分标准：基础分 准确率 50% + 反应 30% + 难度 20%；腰射（无准星）命中另给高额加成
+        const baseScore = accuracyScore * 0.50 + speedScore * 0.30 + difficultyScore * 0.20;
+        noscopeBonus = state.hipHits * 10;   // 腰射每命中一发 +10 分
+        totalScore = Math.round(clampNum(baseScore + noscopeBonus, 0, 100));
+      } else {
+        // 步枪：准确率 45% + 反应 30% + 难度 25%
+        totalScore = Math.round(clampNum(
+          accuracyScore * 0.45 + speedScore * 0.30 + difficultyScore * 0.25, 0, 100));
+      }
 
       let letter = 'D', desc = '萌新水平，别灰心，坚持训练就能看到进步！';
       if (totalScore >= 85) { letter = 'S'; desc = '颗秒级！反应极快，指哪打哪，每一枪都是头！'; }
@@ -1694,7 +1711,9 @@
       else if (totalScore >= 52) { letter = 'B'; desc = '中规中矩，有颗秒的潜力，多练练预瞄和定位。'; }
       else if (totalScore >= 32) { letter = 'C'; desc = '反应还需提升，建议降低灵敏度，从跟枪开始练起。'; }
 
-      return { letter, desc, totalScore, accuracyScore, speedScore, difficultyScore };
+      if (state.weapon === 'sniper' && state.hipHits > 0) desc += ' 盲狙命中 ' + state.hipHits + ' 发！';
+
+      return { letter, desc, totalScore, accuracyScore, speedScore, difficultyScore, noscopeBonus };
     }
 
     function backToMenu() {
