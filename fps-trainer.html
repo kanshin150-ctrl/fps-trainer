@@ -31,6 +31,10 @@
     /* 开镜时准星线条缩短 */
     #crosshair.scoped::before { height: 80%; }
     #crosshair.scoped::after { width: 80%; }
+    /* 狙击枪开镜：细准星 */
+    #crosshair.sniper::before { width: 1px; }
+    #crosshair.sniper::after { height: 1px; }
+    #crosshair.sniper .dot { width: 2px; height: 2px; }
 
     /* 开镜红点瞄准镜 */
     #scopeVignette {
@@ -331,6 +335,12 @@
   <div id="settingsOverlay" class="overlay hidden">
     <div class="panel" id="settingsPanel">
       <p class="panel-title">SETTINGS</p>
+      <div class="row"><label for="weapon">武器</label>
+        <select id="weapon">
+          <option value="rifle" selected>步枪 (AK-47)</option>
+          <option value="sniper">狙击枪 (莫辛纳甘)</option>
+        </select>
+      </div>
       <div class="row"><label for="gameMode">训练模式</label>
         <select id="gameMode">
           <option value="count" selected>定量模式</option>
@@ -404,6 +414,28 @@
         <div style="display:flex;align-items:center;gap:0.4rem;width:120px;">
           <input type="range" id="mouseSensitivity" value="1" min="0.3" max="2.5" step="0.1" style="flex:1;accent-color:#ff4444;" />
           <span id="mouseSensitivityVal" style="color:#fff;font-size:0.8rem;min-width:2.5em;">1.0×</span>
+        </div>
+      </div>
+      <div style="border-top:1px solid #2a2a3a;padding-top:0.5rem;margin-top:0.2rem;color:#ffaa00;font-size:0.75rem;letter-spacing:0.15em;">狙击枪专属设置</div>
+      <div class="row"><label for="sniperScopeSize">开镜准星大小</label>
+        <div style="display:flex;align-items:center;gap:0.4rem;width:120px;">
+          <input type="range" id="sniperScopeSize" value="18" min="8" max="40" step="1" style="flex:1;accent-color:#ff4444;" />
+          <span id="sniperScopeSizeVal" style="color:#fff;font-size:0.8rem;min-width:2.5em;">18px</span>
+        </div>
+      </div>
+      <div class="row"><label for="sniperCrosshairColor">准星颜色</label>
+        <input type="color" id="sniperCrosshairColor" value="#00ff00" style="width:120px;height:28px;border:none;background:transparent;cursor:pointer;padding:0;" />
+      </div>
+      <div class="row"><label for="sniperReloadDuration">换弹时间</label>
+        <div style="display:flex;align-items:center;gap:0.4rem;width:120px;">
+          <input type="range" id="sniperReloadDuration" value="2.2" min="0.5" max="5" step="0.1" style="flex:1;accent-color:#ff4444;" />
+          <span id="sniperReloadDurationVal" style="color:#fff;font-size:0.8rem;min-width:2.5em;">2.2s</span>
+        </div>
+      </div>
+      <div class="row"><label for="sniperRecoilStrength">后坐力强度</label>
+        <div style="display:flex;align-items:center;gap:0.4rem;width:120px;">
+          <input type="range" id="sniperRecoilStrength" value="1.6" min="0.3" max="5" step="0.1" style="flex:1;accent-color:#ff4444;" />
+          <span id="sniperRecoilStrengthVal" style="color:#fff;font-size:0.8rem;min-width:2.5em;">1.6×</span>
         </div>
       </div>
       <button class="btn btn-secondary" id="btnCloseSettings" style="margin-top:0.5rem;">返回</button>
@@ -517,7 +549,7 @@
     // ==================== 状态 ====================
     const state = {
       gameMode: 'count', ballCount: 15, timeLimit: 60, timeRemaining: 0,
-      distance: 12, wallScale: 1.0, recoilStrength: 1.0, crosshairHipSize: 24, crosshairScopeSize: 20, crosshairColor: '#00ff00', mouseSensitivity: 1.0,
+      distance: 12, wallScale: 1.0, recoilStrength: 1.0, crosshairHipSize: 24, crosshairScopeSize: 20, crosshairColor: '#00ff00', mouseSensitivity: 1.0, weapon: 'rifle', sniperScopeSize: 18, sniperCrosshairColor: '#00ff00', sniperReloadDuration: 2.2, sniperRecoilStrength: 1.6,
       ballSize: 0.35, ballDuration: 1000, ballInterval: 500,
       hits: 0, misses: 0, totalClicks: 0,
       reactionTimes: [], currentBall: 0, totalBalls: 0,
@@ -776,7 +808,113 @@
       return gun;
     }
 
-    const gunModel = createAK47();
+    // ==================== 莫辛纳甘狙击枪模型 ====================
+    function createSniper() {
+      const gun = new THREE.Group();
+
+      const darkMetal = new THREE.MeshStandardMaterial({ color: 0x1a1a1a, roughness: 0.25, metalness: 0.95 });
+      const midMetal = new THREE.MeshStandardMaterial({ color: 0x2a2a2a, roughness: 0.3, metalness: 0.9 });
+      const woodMat = new THREE.MeshStandardMaterial({ color: 0x6b4a2a, roughness: 0.6, metalness: 0.05 });
+      const woodDark = new THREE.MeshStandardMaterial({ color: 0x523616, roughness: 0.65, metalness: 0.05 });
+      const barrelMat = new THREE.MeshStandardMaterial({ color: 0x2e2e2e, roughness: 0.12, metalness: 0.98 });
+      const scopeMat = new THREE.MeshStandardMaterial({ color: 0x111111, roughness: 0.2, metalness: 0.85 });
+      const lensMat = new THREE.MeshStandardMaterial({ color: 0x0a2a3a, roughness: 0.05, metalness: 0.1, emissive: 0x06121a, emissiveIntensity: 0.4 });
+
+      // --- 长枪管 ---
+      const barrel = new THREE.Mesh(new THREE.CylinderGeometry(0.007, 0.007, 0.6, 16), barrelMat);
+      barrel.rotation.x = Math.PI / 2;
+      barrel.position.set(0, 0.005, 0.28);
+      gun.add(barrel);
+
+      // --- 枪口 ---
+      const muzzle = new THREE.Mesh(new THREE.CylinderGeometry(0.009, 0.009, 0.03, 16), darkMetal);
+      muzzle.rotation.x = Math.PI / 2;
+      muzzle.position.set(0, 0.005, 0.6);
+      gun.add(muzzle);
+
+      // --- 前护木（木质）---
+      const forend = new THREE.Mesh(new THREE.BoxGeometry(0.032, 0.034, 0.3), woodMat);
+      forend.position.set(0, -0.008, 0.28);
+      gun.add(forend);
+
+      // --- 机匣 ---
+      const receiver = new THREE.Mesh(new THREE.BoxGeometry(0.03, 0.034, 0.14), midMetal);
+      receiver.position.set(0, 0.002, 0.0);
+      gun.add(receiver);
+
+      // --- 枪栓（拉机柄）---
+      const boltHandle = new THREE.Mesh(new THREE.CylinderGeometry(0.005, 0.005, 0.05, 10), darkMetal);
+      boltHandle.rotation.z = Math.PI / 2;
+      boltHandle.position.set(0.022, 0.03, -0.01);
+      gun.add(boltHandle);
+      const boltKnob = new THREE.Mesh(new THREE.SphereGeometry(0.008, 10, 10), darkMetal);
+      boltKnob.position.set(0.045, 0.03, -0.01);
+      gun.add(boltKnob);
+
+      // --- 枪托（木质）---
+      const stockGroup = new THREE.Group();
+      stockGroup.position.set(0, -0.006, -0.1);
+      const stock = new THREE.Mesh(new THREE.BoxGeometry(0.03, 0.04, 0.24), woodMat);
+      stock.position.set(0, 0, -0.1);
+      stockGroup.add(stock);
+      const stockComb = new THREE.Mesh(new THREE.BoxGeometry(0.028, 0.03, 0.2), woodDark);
+      stockComb.position.set(0, 0.02, -0.1);
+      stockGroup.add(stockComb);
+      const buttPlate = new THREE.Mesh(new THREE.BoxGeometry(0.032, 0.05, 0.012), darkMetal);
+      buttPlate.position.set(0, 0, -0.22);
+      stockGroup.add(buttPlate);
+      gun.add(stockGroup);
+
+      // --- 内置弹仓底板 ---
+      const floorPlate = new THREE.Mesh(new THREE.BoxGeometry(0.024, 0.006, 0.06), midMetal);
+      floorPlate.position.set(0, -0.03, -0.02);
+      gun.add(floorPlate);
+
+      // --- 扳机护圈 ---
+      const guard = new THREE.Mesh(new THREE.TorusGeometry(0.018, 0.004, 8, 8, Math.PI), darkMetal);
+      guard.position.set(0, -0.045, -0.05);
+      guard.rotation.z = Math.PI / 2;
+      gun.add(guard);
+      const trigger = new THREE.Mesh(new THREE.BoxGeometry(0.006, 0.018, 0.003), midMetal);
+      trigger.position.set(0, -0.045, -0.05);
+      gun.add(trigger);
+
+      // --- 狙击镜（顶部）---
+      const scopeGroup = new THREE.Group();
+      scopeGroup.position.set(0, 0.032, 0.05);
+      const scopeTube = new THREE.Mesh(new THREE.CylinderGeometry(0.011, 0.011, 0.16, 16), scopeMat);
+      scopeTube.rotation.x = Math.PI / 2;
+      scopeGroup.add(scopeTube);
+      const scopeBell = new THREE.Mesh(new THREE.CylinderGeometry(0.016, 0.016, 0.02, 16), scopeMat);
+      scopeBell.rotation.x = Math.PI / 2;
+      scopeBell.position.z = 0.09;
+      scopeGroup.add(scopeBell);
+      const scopeLens = new THREE.Mesh(new THREE.CylinderGeometry(0.013, 0.013, 0.004, 16), lensMat);
+      scopeLens.rotation.x = Math.PI / 2;
+      scopeLens.position.z = 0.1;
+      scopeGroup.add(scopeLens);
+      const mountFront = new THREE.Mesh(new THREE.BoxGeometry(0.008, 0.02, 0.012), darkMetal);
+      mountFront.position.set(0, -0.02, 0.1);
+      scopeGroup.add(mountFront);
+      const mountRear = new THREE.Mesh(new THREE.BoxGeometry(0.008, 0.02, 0.012), darkMetal);
+      mountRear.position.set(0, -0.02, -0.1);
+      scopeGroup.add(mountRear);
+      gun.add(scopeGroup);
+
+      // --- 机械瞄具 ---
+      const frontSight = new THREE.Mesh(new THREE.BoxGeometry(0.003, 0.014, 0.003), darkMetal);
+      frontSight.position.set(0, 0.024, 0.55);
+      gun.add(frontSight);
+      const rearSight = new THREE.Mesh(new THREE.BoxGeometry(0.012, 0.006, 0.01), darkMetal);
+      rearSight.position.set(0, 0.026, -0.05);
+      gun.add(rearSight);
+
+      return gun;
+    }
+
+    const ak47Model = createAK47();
+    const sniperModel = createSniper();
+    let gunModel = ak47Model;
     // 腰射位置（右下角）
     const HIP_POS = new THREE.Vector3(0.14, -0.16, -0.25);
     const HIP_ROT = new THREE.Euler(0, -0.03, 0);
@@ -784,9 +922,13 @@
     const ADS_POS = new THREE.Vector3(0, -0.12, -0.22);
     const ADS_ROT = new THREE.Euler(0, 0, 0);
 
-    gunModel.position.copy(HIP_POS);
-    gunModel.rotation.copy(HIP_ROT);
-    camera.add(gunModel);
+    ak47Model.position.copy(HIP_POS);
+    ak47Model.rotation.copy(HIP_ROT);
+    sniperModel.position.copy(HIP_POS);
+    sniperModel.rotation.copy(HIP_ROT);
+    sniperModel.visible = false;
+    camera.add(ak47Model);
+    camera.add(sniperModel);
     scene.add(camera);
 
     // 枪口闪光位置（相对于枪）
@@ -1025,6 +1167,9 @@
         }
       }
 
+      // 狙击枪为栓动式：每打一发自动拉栓换弹
+      if (state.weapon === 'sniper') startReload();
+
       updateHUD();
     }
 
@@ -1183,8 +1328,29 @@
 
     // ==================== 开镜 (ADS) ====================
     function applyCrosshairSettings() {
-      crosshair.style.setProperty('--ch-color', state.crosshairColor);
-      crosshair.style.setProperty('--ch-size', (state.isScoped ? state.crosshairScopeSize : state.crosshairHipSize) + 'px');
+      const isSniper = state.weapon === 'sniper';
+      crosshair.classList.toggle('sniper', isSniper);
+      // 狙击枪腰射无准星
+      if (isSniper && !state.isScoped) {
+        crosshair.style.display = 'none';
+        return;
+      }
+      crosshair.style.display = 'block';
+      const color = isSniper ? state.sniperCrosshairColor : state.crosshairColor;
+      const size = isSniper ? state.sniperScopeSize
+        : (state.isScoped ? state.crosshairScopeSize : state.crosshairHipSize);
+      crosshair.style.setProperty('--ch-color', color);
+      crosshair.style.setProperty('--ch-size', size + 'px');
+    }
+
+    function applyWeapon() {
+      const isSniper = state.weapon === 'sniper';
+      gunModel = isSniper ? sniperModel : ak47Model;
+      ak47Model.visible = !isSniper;
+      sniperModel.visible = isSniper;
+      gunModel.position.copy(HIP_POS);
+      gunModel.rotation.copy(HIP_ROT);
+      muzzleFlashLocal.z = isSniper ? 0.62 : 0.48;
     }
 
     function setScoped(scoped) {
@@ -1192,7 +1358,7 @@
       crosshair.classList.toggle('scoped', scoped);
       applyCrosshairSettings();
       scopeVignette.classList.toggle('active', scoped);
-      redDot.classList.toggle('active', scoped);
+      redDot.classList.toggle('active', scoped && state.weapon !== 'sniper');
       const scopeBtn = document.getElementById('btnScope');
       if (scopeBtn) scopeBtn.classList.toggle('active', scoped);
     }
@@ -1365,6 +1531,17 @@
       state.crosshairScopeSize = Math.max(8, Math.min(40, parseInt(document.getElementById('crosshairScopeSize').value) || 20));
       state.crosshairColor = document.getElementById('crosshairColor').value || '#00ff00';
       state.mouseSensitivity = Math.max(0.3, Math.min(2.5, parseFloat(document.getElementById('mouseSensitivity').value) || 1));
+      state.weapon = document.getElementById('weapon').value || 'rifle';
+      state.sniperScopeSize = Math.max(8, Math.min(40, parseInt(document.getElementById('sniperScopeSize').value) || 18));
+      state.sniperCrosshairColor = document.getElementById('sniperCrosshairColor').value || '#00ff00';
+      state.sniperReloadDuration = Math.max(0.5, Math.min(5, parseFloat(document.getElementById('sniperReloadDuration').value) || 2.2));
+      state.sniperRecoilStrength = Math.max(0.3, Math.min(5, parseFloat(document.getElementById('sniperRecoilStrength').value) || 1.6));
+      // 武器专属覆盖
+      if (state.weapon === 'sniper') {
+        state.maxAmmo = 1;
+        state.recoilStrength = state.sniperRecoilStrength;
+        state.reloadDuration = state.sniperReloadDuration;
+      }
     }
 
     function startGame() {
@@ -1374,6 +1551,7 @@
       if (state._startTimeout) { clearTimeout(state._startTimeout); state._startTimeout = null; }
       readSettings();
       wallGroup.scale.set(state.wallScale, state.wallScale, 1);
+      applyWeapon();
       applyCrosshairSettings();
       state.hits = 0; state.misses = 0; state.totalClicks = 0;
       state.reactionTimes = []; state.currentBall = 0;
@@ -1384,7 +1562,7 @@
       clearAllTargets(); updateHUD();
       menuOverlay.classList.add('hidden'); resultOverlay.classList.add('hidden');
       document.body.classList.add('in-game');
-      crosshair.style.display = 'block'; hint.style.opacity = '1'; hud.style.opacity = '1'; hitFeed.innerHTML = '';
+      applyCrosshairSettings(); hint.style.opacity = '1'; hud.style.opacity = '1'; hitFeed.innerHTML = '';
       // 自动锁定鼠标——延迟一帧确保 overlay 已隐藏（仅桌面端）
       if (!isTouchDevice) {
         requestAnimationFrame(() => renderer.domElement.requestPointerLock());
@@ -1748,6 +1926,15 @@
     });
     document.getElementById('mouseSensitivity').addEventListener('input', function() {
       document.getElementById('mouseSensitivityVal').textContent = parseFloat(this.value).toFixed(1) + '×';
+    });
+    document.getElementById('sniperScopeSize').addEventListener('input', function() {
+      document.getElementById('sniperScopeSizeVal').textContent = this.value + 'px';
+    });
+    document.getElementById('sniperReloadDuration').addEventListener('input', function() {
+      document.getElementById('sniperReloadDurationVal').textContent = parseFloat(this.value).toFixed(1) + 's';
+    });
+    document.getElementById('sniperRecoilStrength').addEventListener('input', function() {
+      document.getElementById('sniperRecoilStrengthVal').textContent = parseFloat(this.value).toFixed(1) + '×';
     });
     window.addEventListener('resize', () => { camera.aspect = window.innerWidth / window.innerHeight; camera.updateProjectionMatrix(); renderer.setSize(window.innerWidth, window.innerHeight); });
 
