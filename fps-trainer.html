@@ -1415,7 +1415,7 @@
       state.isLocked = document.pointerLockElement === renderer.domElement;
 
       if (state.isLocked) {
-        crosshair.style.display = 'block';
+        applyCrosshairSettings();
         document.body.style.cursor = 'none';
       } else {
         crosshair.style.display = 'none';
