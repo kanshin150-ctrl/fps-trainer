@@ -199,6 +199,14 @@
       background: #14141f; border: 1px solid #2a2a3a; border-radius: 12px;
       padding: 2rem 2.5rem; width: 400px; display: flex; flex-direction: column; gap: 1rem;
     }
+    /* 设置项过多时面板可滚动查看全部 */
+    #settingsPanel {
+      max-height: 86vh; overflow-y: auto;
+      scrollbar-width: thin; scrollbar-color: #3a3a4a transparent;
+    }
+    #settingsPanel::-webkit-scrollbar { width: 8px; }
+    #settingsPanel::-webkit-scrollbar-thumb { background: #3a3a4a; border-radius: 4px; }
+    #settingsPanel::-webkit-scrollbar-track { background: transparent; }
     .row { display: flex; justify-content: space-between; align-items: center; }
     .row label { font-size: 0.9rem; color: #bbb; }
     .row input, .row select {
