@@ -287,6 +287,37 @@
     }
     body.touch-mode.in-game #btnPause { display: flex; }
 
+    /* 手机端按键自定义（设置项 + 编辑模式） */
+    #btnCustomizeRow { display: none; }
+    body.touch-mode #btnCustomizeRow { display: flex; }
+    .touch-btn .rsz {
+      display: none; position: absolute; right: -8px; bottom: -8px;
+      width: 22px; height: 22px; border-radius: 50%;
+      background: #ffaa00; border: 2px solid #fff;
+      box-shadow: 0 1px 4px rgba(0,0,0,0.45); touch-action: none;
+    }
+    body.edit-touch #touchControls { display: block; }
+    body.edit-touch #btnPause { display: flex; }
+    body.edit-touch .touch-btn { border-style: dashed; border-color: #ffaa00; }
+    body.edit-touch .touch-btn .rsz { display: block; }
+    #btnEditBackdrop {
+      display: none; position: fixed; inset: 0; z-index: 115;
+      background: rgba(0,0,0,0.6); pointer-events: none;
+    }
+    body.edit-touch #btnEditBackdrop { display: block; }
+    #btnEditBar {
+      display: none; position: fixed; left: 0; right: 0; bottom: 0;
+      z-index: 140; pointer-events: none;
+      padding: 0.9rem 1rem calc(0.9rem + env(safe-area-inset-bottom, 0px));
+      background: rgba(10,10,18,0.94); border-top: 1px solid #2a2a3a;
+      flex-direction: column; gap: 0.45rem; align-items: center;
+    }
+    body.edit-touch #btnEditBar { display: flex; }
+    #btnEditBar .btn-edit-title { color: #fff; font-weight: 800; letter-spacing: 0.1em; font-size: 0.9rem; }
+    #btnEditBar .btn-edit-hint { color: #999; font-size: 0.72rem; letter-spacing: 0.05em; }
+    #btnEditBar .btn-edit-actions { display: flex; gap: 0.6rem; }
+    #btnEditBar .btn-edit-actions .btn { padding: 0.5rem 1.1rem; font-size: 0.9rem; pointer-events: auto; }
+
     /* 手机端所有界面可上下滑动 */
     body.touch-mode .overlay {
       overflow-y: auto; overflow-x: hidden;
@@ -318,11 +349,23 @@
 
   <!-- 触屏虚拟按键 -->
   <div id="touchControls">
-    <button class="touch-btn" id="btnFire">开火</button>
-    <button class="touch-btn" id="btnScope">开镜</button>
-    <button class="touch-btn" id="btnReload">换弹</button>
+    <button class="touch-btn" id="btnFire">开火<span class="rsz"></span></button>
+    <button class="touch-btn" id="btnScope">开镜<span class="rsz"></span></button>
+    <button class="touch-btn" id="btnReload">换弹<span class="rsz"></span></button>
   </div>
-  <button class="touch-btn" id="btnPause">暂停</button>
+  <button class="touch-btn" id="btnPause">暂停<span class="rsz"></span></button>
+
+  <!-- 按键自定义（仅手机端） -->
+  <div id="btnEditBackdrop"></div>
+  <div id="btnEditBar">
+    <div class="btn-edit-title">按键自定义</div>
+    <div class="btn-edit-hint">拖动按键调整位置 · 拖动橙色圆点调整大小</div>
+    <div class="btn-edit-actions">
+      <button class="btn btn-secondary" id="btnEditReset">重置</button>
+      <button class="btn btn-secondary" id="btnEditBack">返回</button>
+      <button class="btn btn-primary" id="btnEditSave">保存</button>
+    </div>
+  </div>
 
   <!-- 横屏提示 -->
   <div id="rotateOverlay" class="overlay hidden">
@@ -452,6 +495,10 @@
           <input type="range" id="sniperRecoilStrength" value="1.6" min="0.3" max="5" step="0.1" style="flex:1;accent-color:#ff4444;" />
           <span id="sniperRecoilStrengthVal" style="color:#fff;font-size:0.8rem;min-width:2.5em;">1.6×</span>
         </div>
+      </div>
+      <div class="row" id="btnCustomizeRow">
+        <label>按键自定义</label>
+        <button class="btn btn-secondary" id="btnOpenCustomize" style="padding:0.5rem 1rem;font-size:0.9rem;">调整按键</button>
       </div>
       <button class="btn btn-secondary" id="btnCloseSettings" style="margin-top:0.5rem;">返回</button>
     </div>
@@ -1548,6 +1595,155 @@
       bindTouchBtn('btnPause', () => {
         if (state.isActive && !state.roundOver && !state.isPaused) pauseGame();
       });
+
+      // ==================== 按键自定义（位置/大小） ====================
+      const TOUCH_BTN_BASE = { btnFire: 90, btnScope: 62, btnReload: 58, btnPause: 62 };
+      const TOUCH_BTN_IDS = ['btnFire', 'btnScope', 'btnReload', 'btnPause'];
+      const TOUCH_LAYOUT_KEY = 'fpsTrainerTouchLayout';
+      const TOUCH_MIN_S = 0.5, TOUCH_MAX_S = 2.5;
+
+      function landscapeDims() {
+        return { w: Math.max(window.innerWidth, window.innerHeight), h: Math.min(window.innerWidth, window.innerHeight) };
+      }
+      function defaultTouchLayout() {
+        const d = landscapeDims(), W = d.w, H = d.h;
+        return {
+          btnFire:   { x: W - 18 - 90,  y: H - 24 - 90,  s: 1 },
+          btnScope:  { x: W - 128 - 62, y: H - 44 - 62,  s: 1 },
+          btnReload: { x: W - 150 - 58, y: H - 118 - 58, s: 1 },
+          btnPause:  { x: W - 14 - 62,  y: 14,            s: 1 },
+        };
+      }
+      function loadTouchLayout() {
+        try {
+          const raw = localStorage.getItem(TOUCH_LAYOUT_KEY);
+          if (raw) {
+            const parsed = JSON.parse(raw);
+            const def = defaultTouchLayout();
+            const out = {};
+            for (const id of TOUCH_BTN_IDS) {
+              const d = def[id], p = parsed[id];
+              out[id] = (p && typeof p.x === 'number' && typeof p.y === 'number' && typeof p.s === 'number')
+                ? { x: p.x, y: p.y, s: clampNum(p.s, TOUCH_MIN_S, TOUCH_MAX_S) }
+                : d;
+            }
+            return out;
+          }
+        } catch (e) {}
+        return defaultTouchLayout();
+      }
+      let touchLayout = loadTouchLayout();
+
+      function applyTouchLayout() {
+        const W = window.innerWidth, H = window.innerHeight;
+        for (const id of TOUCH_BTN_IDS) {
+          const btn = document.getElementById(id);
+          if (!btn) continue;
+          const l = touchLayout[id], base = TOUCH_BTN_BASE[id];
+          const w = base * l.s, h = base * l.s;
+          btn.style.position = 'fixed';
+          btn.style.left = clampNum(l.x, 0, W - w) + 'px';
+          btn.style.top = clampNum(l.y, 0, H - h) + 'px';
+          btn.style.width = w + 'px';
+          btn.style.height = h + 'px';
+          btn.style.right = 'auto';
+          btn.style.bottom = 'auto';
+        }
+      }
+      applyTouchLayout();
+      window.addEventListener('resize', applyTouchLayout);
+
+      // 编辑模式
+      let editingLayout = false;
+      let editDrag = null;
+
+      function enterTouchEdit() {
+        enterLandscape();
+        settingsOverlay.classList.add('hidden');
+        document.body.classList.add('edit-touch');
+        applyTouchLayout();
+        editingLayout = true;
+      }
+      function exitTouchEdit(save) {
+        editingLayout = false;
+        editDrag = null;
+        document.body.classList.remove('edit-touch');
+        if (save) {
+          try { localStorage.setItem(TOUCH_LAYOUT_KEY, JSON.stringify(touchLayout)); } catch (e) {}
+        } else {
+          touchLayout = loadTouchLayout();
+        }
+        applyTouchLayout();
+        settingsOverlay.classList.remove('hidden');
+      }
+      function resetTouchEdit() {
+        touchLayout = defaultTouchLayout();
+        applyTouchLayout();
+      }
+
+      function startEditDrag(id, mode, t) {
+        const l = touchLayout[id];
+        const base = TOUCH_BTN_BASE[id];
+        const w = base * l.s, h = base * l.s;
+        editDrag = {
+          id, mode, touchId: t.identifier,
+          startX: t.clientX, startY: t.clientY,
+          origX: l.x, origY: l.y, origS: l.s,
+          centerX: l.x + w / 2, centerY: l.y + h / 2,
+          startDist: Math.max(1, Math.hypot(t.clientX - (l.x + w / 2), t.clientY - (l.y + h / 2))),
+        };
+      }
+      function updateEditDrag(t) {
+        if (!editDrag) return;
+        const l = touchLayout[editDrag.id];
+        const base = TOUCH_BTN_BASE[editDrag.id];
+        const W = window.innerWidth, H = window.innerHeight;
+        if (editDrag.mode === 'move') {
+          const w = base * l.s, h = base * l.s;
+          l.x = clampNum(editDrag.origX + (t.clientX - editDrag.startX), 0, W - w);
+          l.y = clampNum(editDrag.origY + (t.clientY - editDrag.startY), 0, H - h);
+        } else {
+          const d = Math.hypot(t.clientX - editDrag.centerX, t.clientY - editDrag.centerY);
+          const ns = clampNum(editDrag.origS * (d / editDrag.startDist), TOUCH_MIN_S, TOUCH_MAX_S);
+          const nw = base * ns, nh = base * ns;
+          l.s = ns;
+          l.x = clampNum(editDrag.centerX - nw / 2, 0, W - nw);
+          l.y = clampNum(editDrag.centerY - nh / 2, 0, H - nh);
+        }
+        applyTouchLayout();
+      }
+
+      for (const id of TOUCH_BTN_IDS) {
+        const btn = document.getElementById(id);
+        if (!btn) continue;
+        const rsz = btn.querySelector('.rsz');
+        btn.addEventListener('touchstart', (e) => {
+          if (!editingLayout) return;
+          e.preventDefault(); e.stopPropagation();
+          const t = e.changedTouches[0];
+          const mode = (rsz && (e.target === rsz || rsz.contains(e.target))) ? 'resize' : 'move';
+          startEditDrag(id, mode, t);
+        }, { passive: false });
+      }
+      document.addEventListener('touchmove', (e) => {
+        if (!editingLayout || !editDrag) return;
+        for (const t of e.changedTouches) {
+          if (t.identifier === editDrag.touchId) { e.preventDefault(); updateEditDrag(t); }
+        }
+      }, { passive: false });
+      const endEditDrag = (e) => {
+        if (!editingLayout || !editDrag) return;
+        for (const t of e.changedTouches) {
+          if (t.identifier === editDrag.touchId) editDrag = null;
+        }
+      };
+      document.addEventListener('touchend', endEditDrag);
+      document.addEventListener('touchcancel', endEditDrag);
+
+      document.getElementById('btnOpenCustomize').addEventListener('click', enterTouchEdit);
+      document.getElementById('btnEditSave').addEventListener('click', () => exitTouchEdit(true));
+      document.getElementById('btnEditBack').addEventListener('click', () => exitTouchEdit(false));
+      document.getElementById('btnEditReset').addEventListener('click', resetTouchEdit);
     }
 
     // ==================== 游戏流程 ====================
