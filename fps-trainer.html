@@ -2145,20 +2145,21 @@
       { name: 's1mple', id: '7998' },
       { name: 'ZywOo', id: '11893' },
       { name: 'device', id: '4629' },
-      { name: 'm0NESY', id: '19230' },
+      { name: 'm0NESY', id: '19230', url: 'https://img-cdn.hltv.org/playerbodyshot/Xn6RSL5KIFiD6hXiBseskM.png?ixlib=java-2.1.0&w=400&s=f65656a3af86ed20f055cc25e35dc8e9' },
       { name: 'ropz', id: '11816' },
-      { name: 'donk', id: '21167' },
+      { name: 'donk', id: '21167', url: 'https://img-cdn.hltv.org/playerbodyshot/yovIrLe65oyvKxFkIoHLCw.png?ixlib=java-2.1.0&w=400&s=8004b2014a729345713bf22c5b798274' },
     ];
     function randomSplash() {
       const el = document.getElementById('splashText');
       el.textContent = splashPhrases[Math.floor(Math.random() * splashPhrases.length)];
       const player = playerBgUrls[Math.floor(Math.random() * playerBgUrls.length)];
-      const url = `https://static.hltv.org/images/playerprofile/bodyshot/${player.id}.png`;
+      const bgUrl = p => p.url || `https://static.hltv.org/images/playerprofile/bodyshot/${p.id}.png`;
+      const url = bgUrl(player);
       const img = new Image();
       img.onload = () => { menuOverlay.style.backgroundImage = `url('${url}')`; };
       img.onerror = () => {
         const next = playerBgUrls[Math.floor(Math.random() * playerBgUrls.length)];
-        const nextUrl = `https://static.hltv.org/images/playerprofile/bodyshot/${next.id}.png`;
+        const nextUrl = bgUrl(next);
         const img2 = new Image();
         img2.onload = () => { menuOverlay.style.backgroundImage = `url('${nextUrl}')`; };
         img2.onerror = () => { menuOverlay.style.backgroundImage = ''; /* HLTV 被墙/防盗链：还原默认渐变背景 */ };
