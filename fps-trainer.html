@@ -132,7 +132,8 @@
       cursor: auto;
     }
     #menuOverlay {
-      background: #e8e8e8;
+      background-color: #0a0a12;
+      background-image: radial-gradient(120% 100% at 50% 0%, #1c1e2a 0%, #0a0a12 55%, #05050a 100%);
       background-position: center;
       background-size: cover;
       background-repeat: no-repeat;
@@ -2144,8 +2145,9 @@
       { name: 's1mple', id: '7998' },
       { name: 'ZywOo', id: '11893' },
       { name: 'device', id: '4629' },
-      { name: 'm0NESY', id: '21167' },
+      { name: 'm0NESY', id: '19230' },
       { name: 'ropz', id: '11816' },
+      { name: 'donk', id: '21167' },
     ];
     function randomSplash() {
       const el = document.getElementById('splashText');
@@ -2159,7 +2161,7 @@
         const nextUrl = `https://static.hltv.org/images/playerprofile/bodyshot/${next.id}.png`;
         const img2 = new Image();
         img2.onload = () => { menuOverlay.style.backgroundImage = `url('${nextUrl}')`; };
-        img2.onerror = () => { menuOverlay.style.backgroundImage = 'none'; };
+        img2.onerror = () => { menuOverlay.style.backgroundImage = ''; /* HLTV 被墙/防盗链：还原默认渐变背景 */ };
         img2.src = nextUrl;
       };
       img.src = url;
