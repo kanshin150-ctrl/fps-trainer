@@ -1693,7 +1693,7 @@
     function getRank(accuracy, avgRt) {
       // 三项子分数（均为 0-100）
       const accuracyScore = clampNum(accuracy, 0, 100);                     // 命中率
-      const speedScore = clampNum((800 - avgRt) / 6, 0, 100);               // 反应速度：200ms→100，800ms→0
+      const speedScore = state.reactionTimes.length > 0 ? clampNum((800 - avgRt) / 6, 0, 100) : 0;  // 反应速度：200ms→100，800ms→0；无命中不计分
       const difficultyScore = clampNum((difficultyFactor() - 0.7) / 0.7 * 100, 0, 100); // 难度：标准(1.0)≈43分，最难(1.4)=100分
       let totalScore, noscopeBonus = 0;
       if (state.weapon === 'sniper') {
