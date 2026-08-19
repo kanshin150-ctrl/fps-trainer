@@ -231,6 +231,9 @@
     .result-bar-fill { height: 100%; border-radius: 3px; background: linear-gradient(90deg, #ff4444, #ffaa00, #44cc44); transition: width 0.8s ease-out; }
     .result-buttons { display: flex; gap: 1rem; justify-content: center; margin-top: 0.5rem; }
 
+    /* 横屏提示 */
+    #rotateOverlay { z-index: 300; background: #0a0a12; }
+
     /* 触屏虚拟按键 */
     #touchControls {
       position: fixed; right: 0; bottom: 0;
@@ -238,7 +241,7 @@
       pointer-events: none; z-index: 120; display: none;
       --safe-b: env(safe-area-inset-bottom, 0px);
     }
-    body.touch-mode #touchControls { display: block; }
+    body.touch-mode.in-game #touchControls { display: block; }
     .touch-btn {
       position: absolute; pointer-events: auto;
       border-radius: 50%; border: 2px solid rgba(255,255,255,0.35);
@@ -288,6 +291,16 @@
     <button class="touch-btn" id="btnFire">开火</button>
     <button class="touch-btn" id="btnScope">开镜</button>
     <button class="touch-btn" id="btnReload">换弹</button>
+  </div>
+
+  <!-- 横屏提示 -->
+  <div id="rotateOverlay" class="overlay hidden">
+    <div style="text-align:center;color:#fff;padding:0 2rem;">
+      <div style="font-size:4rem;line-height:1;">🔄</div>
+      <p style="font-size:1.5rem;font-weight:800;margin:1.2rem 0 0.4rem;letter-spacing:0.05em;">请旋转手机至横屏</p>
+      <p style="color:#aaa;font-size:0.9rem;margin-bottom:1.8rem;">横屏模式下体验最佳，请横握手机进行游戏</p>
+      <button class="btn btn-primary" id="btnEnterLandscape">进入横屏</button>
+    </div>
   </div>
 
   <!-- 菜单 -->
@@ -403,6 +416,42 @@
     const isTouchDevice = window.matchMedia('(pointer: coarse)').matches &&
       ('ontouchstart' in window || navigator.maxTouchPoints > 0);
     if (isTouchDevice) document.body.classList.add('touch-mode');
+
+    // ==================== 横屏适配 ====================
+    const rotateOverlay = document.getElementById('rotateOverlay');
+    const mqPortrait = window.matchMedia('(orientation: portrait)');
+
+    function updateRotateOverlay() {
+      if (!isTouchDevice) { rotateOverlay.classList.add('hidden'); return; }
+      if (mqPortrait.matches) rotateOverlay.classList.remove('hidden');
+      else rotateOverlay.classList.add('hidden');
+    }
+
+    function enterLandscape() {
+      if (!isTouchDevice) return;
+      const el = document.documentElement;
+      let fsPromise = null;
+      try {
+        if (el.requestFullscreen) fsPromise = el.requestFullscreen();
+        else if (el.webkitRequestFullscreen) fsPromise = el.webkitRequestFullscreen();
+      } catch (e) { fsPromise = null; }
+      if (fsPromise && typeof fsPromise.then === 'function') {
+        fsPromise.then(() => {
+          try {
+            if (screen.orientation && screen.orientation.lock) {
+              screen.orientation.lock('landscape').catch(() => {});
+            }
+          } catch (e) {}
+        }).catch(() => {});
+      }
+    }
+
+    if (isTouchDevice) {
+      window.addEventListener('orientationchange', updateRotateOverlay);
+      window.addEventListener('resize', updateRotateOverlay);
+      document.getElementById('btnEnterLandscape').addEventListener('click', enterLandscape);
+    }
+    updateRotateOverlay();
 
     // ==================== 状态 ====================
     const state = {
@@ -1194,6 +1243,7 @@
     }
 
     function startGame() {
+      enterLandscape();
       clearInterval(spawnInterval); spawnInterval = null;
       clearInterval(state._timerInterval); state._timerInterval = null;
       if (state._startTimeout) { clearTimeout(state._startTimeout); state._startTimeout = null; }
@@ -1206,6 +1256,7 @@
       setScoped(false);
       clearAllTargets(); updateHUD();
       menuOverlay.classList.add('hidden'); resultOverlay.classList.add('hidden');
+      document.body.classList.add('in-game');
       crosshair.style.display = 'block'; hint.style.opacity = '1'; hud.style.opacity = '1';
       // 自动锁定鼠标——延迟一帧确保 overlay 已隐藏（仅桌面端）
       if (!isTouchDevice) {
@@ -1265,6 +1316,7 @@
     function finishRound() {
       state.isActive = false; state.roundOver = true;
       state.isReloading = false; state.reloadTimer = 0; setScoped(false);
+      document.body.classList.remove('in-game');
       clearInterval(spawnInterval); spawnInterval = null;
       clearInterval(state._timerInterval); state._timerInterval = null;
       if (state._startTimeout) { clearTimeout(state._startTimeout); state._startTimeout = null; }
@@ -1317,6 +1369,7 @@
     function backToMenu() {
       state.isActive = false; state.roundOver = true; state.isPaused = false;
       state.isReloading = false; state.reloadTimer = 0; setScoped(false);
+      document.body.classList.remove('in-game');
       clearInterval(spawnInterval); spawnInterval = null;
       clearInterval(state._timerInterval); state._timerInterval = null;
       if (state._startTimeout) { clearTimeout(state._startTimeout); state._startTimeout = null; }
@@ -1335,6 +1388,7 @@
     function pauseGame() {
       if (!state.isActive || state.roundOver || state.isPaused) return;
       state.isPaused = true;
+      document.body.classList.remove('in-game');
       if (document.pointerLockElement) document.exitPointerLock();
       pauseOverlay.classList.remove('hidden');
       crosshair.style.display = 'none';
@@ -1345,6 +1399,7 @@
       if (!state.isPaused) return;
       state.isPaused = false;
       pauseOverlay.classList.add('hidden');
+      document.body.classList.add('in-game');
       if (!isTouchDevice) renderer.domElement.requestPointerLock();
     }
 
